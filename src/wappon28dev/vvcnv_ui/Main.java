@@ -7,7 +7,6 @@ import javax.swing.*;
  */
 public class Main {
   public static void main(String[] args) {
-    // Create and show the main window
     SwingUtilities.invokeLater(() -> {
       var mainWindow = new MainWindow();
       mainWindow.setVisible(true);
