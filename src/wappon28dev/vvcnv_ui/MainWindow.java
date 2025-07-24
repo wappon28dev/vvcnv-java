@@ -2,7 +2,9 @@ package wappon28dev.vvcnv_ui;
 
 import wappon28dev.vvcnv_ui.components.FileDropHandler;
 import wappon28dev.vvcnv_ui.dialogs.CrossTestWindow;
+import wappon28dev.vvcnv_ui.dialogs.PresetDialog;
 import wappon28dev.vvcnv_ui.models.ConversionParams;
+import wappon28dev.vvcnv_ui.models.Preset;
 import wappon28dev.vvcnv_ui.services.VideoService;
 import wappon28dev.vvcnv_ui.utils.UIUtils;
 import wappon28dev.vvncv_java.modules.VideoRes;
@@ -39,6 +41,8 @@ public class MainWindow extends JFrame {
   private JButton startButton;
   private JButton selectInputButton;
   private JButton selectOutputButton;
+  private JButton savePresetButton;
+  private JButton loadPresetButton;
 
   // Services
   private VideoService videoService;
@@ -88,7 +92,7 @@ public class MainWindow extends JFrame {
   }
 
   private void initializeComponents() {
-    setTitle("VVCNV - Video Variant Converter");
+    setTitle("vvcnv");
     setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
     setSize(800, 600);
     setLocationRelativeTo(null);
@@ -128,6 +132,9 @@ public class MainWindow extends JFrame {
     startButton = new JButton("変換開始");
     startButton.setFont(startButton.getFont().deriveFont(Font.BOLD, 16f));
     startButton.setPreferredSize(new Dimension(200, 40));
+
+    savePresetButton = new JButton("プリセット保存");
+    loadPresetButton = new JButton("プリセット読込");
   }
 
   private void setupLayout() {
@@ -141,6 +148,8 @@ public class MainWindow extends JFrame {
     topPanel.add(createConfigurationPanel(), BorderLayout.CENTER);
 
     var buttonPanel = new JPanel(new FlowLayout());
+    buttonPanel.add(loadPresetButton);
+    buttonPanel.add(savePresetButton);
     buttonPanel.add(startButton);
 
     mainPanel.add(topPanel, BorderLayout.CENTER);
@@ -266,6 +275,8 @@ public class MainWindow extends JFrame {
     selectInputButton.addActionListener(e -> selectInputFile());
     selectOutputButton.addActionListener(e -> selectOutputDirectory());
     startButton.addActionListener(e -> startConversion());
+    savePresetButton.addActionListener(e -> showSavePresetDialog());
+    loadPresetButton.addActionListener(e -> showLoadPresetDialog());
     inputFileField.addPropertyChangeListener("text", e -> updateAudioCheckbox());
   }
 
@@ -414,5 +425,71 @@ public class MainWindow extends JFrame {
         (Integer) maxCrfSpinner.getValue(),
         (Integer) crfStepsSpinner.getValue(),
         (Integer) maxThreadsSpinner.getValue());
+  }
+
+  /**
+   * Show preset save/load dialog
+   */
+  private void showSavePresetDialog() {
+    var currentPreset = createCurrentPreset();
+    var dialog = new PresetDialog(this, currentPreset, this::applyPreset);
+    dialog.setVisible(true);
+  }
+
+  /**
+   * Show preset load dialog
+   */
+  private void showLoadPresetDialog() {
+    var currentPreset = createCurrentPreset();
+    var dialog = new PresetDialog(this, currentPreset, this::applyPreset);
+    dialog.setVisible(true);
+  }
+
+  /**
+   * Create preset from current UI state
+   */
+  private Preset createCurrentPreset() {
+    return new Preset(
+        "", // Name will be set by user in dialog
+        audioCheckBox.isSelected(),
+        (String) encodingComboBox.getSelectedItem(),
+        ((VideoRes) minResComboBox.getSelectedItem()).name(),
+        ((VideoRes) maxResComboBox.getSelectedItem()).name(),
+        (Integer) resStepsSpinner.getValue(),
+        (Integer) minCrfSpinner.getValue(),
+        (Integer) maxCrfSpinner.getValue(),
+        (Integer) crfStepsSpinner.getValue(),
+        (Integer) maxThreadsSpinner.getValue());
+  }
+
+  /**
+   * Apply preset to UI components
+   */
+  private void applyPreset(Preset preset) {
+    try {
+      audioCheckBox.setSelected(preset.hasAudio());
+      encodingComboBox.setSelectedItem(preset.encoding());
+
+      // Set resolution combo boxes
+      VideoRes minRes = VideoRes.valueOf(preset.minRes());
+      VideoRes maxRes = VideoRes.valueOf(preset.maxRes());
+      minResComboBox.setSelectedItem(minRes);
+      maxResComboBox.setSelectedItem(maxRes);
+
+      resStepsSpinner.setValue(preset.resSteps());
+      minCrfSpinner.setValue(preset.minCrf());
+      maxCrfSpinner.setValue(preset.maxCrf());
+      crfStepsSpinner.setValue(preset.crfSteps());
+      maxThreadsSpinner.setValue(preset.maxThreads());
+
+      JOptionPane.showMessageDialog(this,
+          "プリセット '" + preset.name() + "' を適用しました。",
+          "プリセット適用", JOptionPane.INFORMATION_MESSAGE);
+
+    } catch (Exception e) {
+      JOptionPane.showMessageDialog(this,
+          "プリセットの適用に失敗しました: " + e.getMessage(),
+          "エラー", JOptionPane.ERROR_MESSAGE);
+    }
   }
 }
