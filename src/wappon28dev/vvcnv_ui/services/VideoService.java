@@ -1,8 +1,8 @@
 package wappon28dev.vvcnv_ui.services;
 
-import wappon28dev.vvncv_java.modules.VideoModule;
-import wappon28dev.vvncv_java.modules.VideoStat;
-import wappon28dev.vvncv_java.util.Result;
+import wappon28dev.vvcnv_java.modules.VideoModule;
+import wappon28dev.vvcnv_java.modules.VideoStat;
+import wappon28dev.vvcnv_java.util.Result;
 
 import javax.swing.*;
 import java.io.IOException;

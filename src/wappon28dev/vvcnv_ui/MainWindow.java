@@ -7,8 +7,8 @@ import wappon28dev.vvcnv_ui.models.ConversionParams;
 import wappon28dev.vvcnv_ui.models.Preset;
 import wappon28dev.vvcnv_ui.services.VideoService;
 import wappon28dev.vvcnv_ui.utils.UIUtils;
-import wappon28dev.vvncv_java.modules.VideoRes;
-import wappon28dev.vvncv_java.modules.VideoStat;
+import wappon28dev.vvcnv_java.modules.VideoRes;
+import wappon28dev.vvcnv_java.modules.VideoStat;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;

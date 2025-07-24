@@ -1,7 +1,7 @@
-package wappon28dev.vvncv_java.test;
+package wappon28dev.vvcnv_java.test;
 
-import wappon28dev.vvncv_java.modules.*;
-import wappon28dev.vvncv_java.util.Result;
+import wappon28dev.vvcnv_java.modules.*;
+import wappon28dev.vvcnv_java.util.Result;
 
 import java.io.IOException;
 

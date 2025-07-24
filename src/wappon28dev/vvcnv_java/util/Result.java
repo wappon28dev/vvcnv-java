@@ -1,4 +1,4 @@
-package wappon28dev.vvncv_java.util;
+package wappon28dev.vvcnv_java.util;
 
 import java.util.function.Function;
 import java.util.function.Consumer;

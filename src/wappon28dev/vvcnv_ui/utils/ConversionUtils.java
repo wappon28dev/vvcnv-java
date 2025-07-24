@@ -1,6 +1,6 @@
 package wappon28dev.vvcnv_ui.utils;
 
-import wappon28dev.vvncv_java.modules.VideoRes;
+import wappon28dev.vvcnv_java.modules.VideoRes;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -1,4 +1,4 @@
-package wappon28dev.vvncv_java.modules;
+package wappon28dev.vvcnv_java.modules;
 
 import java.time.Duration;
 import java.util.List;

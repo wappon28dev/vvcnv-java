@@ -5,14 +5,14 @@
       "type": "java",
       "name": "SimpleVideoTest",
       "request": "launch",
-      "mainClass": "wappon28dev.vvncv_java.test.SimpleVideoTest",
+      "mainClass": "wappon28dev.vvcnv_java.test.SimpleVideoTest",
       "projectName": "univ-oop-proc-1"
     },
     {
       "type": "java",
       "name": "Main",
       "request": "launch",
-      "mainClass": "wappon28dev.vvncv_java.Main",
+      "mainClass": "wappon28dev.vvcnv_java.Main",
       "projectName": "univ-oop-proc-1"
     },
     {

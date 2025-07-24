@@ -28,7 +28,7 @@
 ### 📁 プロジェクト構造
 
 ```
-src/wappon28dev/vvncv_java/
+src/wappon28dev/vvcnv_java/
 ├── Main.java                    # メインエントリーポイント
 ├── util/
 │   └── Result.java             # Rust Result型の実装
@@ -54,13 +54,13 @@ src/wappon28dev/vvncv_java/
 ### メイン機能実行
 
 ```bash
-mvn clean compile exec:java -Dexec.mainClass="wappon28dev.vvncv_java.Main"
+mvn clean compile exec:java -Dexec.mainClass="wappon28dev.vvcnv_java.Main"
 ```
 
 ### テスト実行
 
 ```bash
-mvn clean compile exec:java -Dexec.mainClass="wappon28dev.vvncv_java.test.SimpleVideoTest"
+mvn clean compile exec:java -Dexec.mainClass="wappon28dev.vvcnv_java.test.SimpleVideoTest"
 ```
 
 ## 📊 動作結果
