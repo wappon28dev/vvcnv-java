@@ -37,6 +37,7 @@ public class VideoModule {
    */
   public Result<VideoStat, String> stat(String inputPath) {
     try {
+      System.out.println("FFprobe実行中: " + inputPath);
       FFmpegProbeResult probeResult = ffprobe.probe(inputPath);
 
       // Extract video stream
@@ -49,6 +50,8 @@ public class VideoModule {
         return Result.err("No video stream found");
       }
 
+      System.out.println("動画ストリーム情報: " + videoStream.width + "x" + videoStream.height);
+
       // Extract audio streams
       List<AudioStreamInfo> audioStreams = probeResult.getStreams().stream()
           .filter(stream -> stream.codec_type == FFmpegStream.CodecType.AUDIO)
@@ -58,17 +61,66 @@ public class VideoModule {
               stream.channels))
           .toList();
 
-      // Get duration
-      Duration duration = Duration.ofNanos((long) (probeResult.format.duration * 1_000_000_000));
+      System.out.println("音声ストリーム数: " + audioStreams.size());
 
-      // Get file size
-      long fileSize = probeResult.format.size;
+      // Get duration with error handling
+      Duration duration;
+      try {
+        double durationValue = probeResult.format.duration;
+        if (durationValue > 0) {
+          duration = Duration.ofNanos((long) (durationValue * 1_000_000_000));
+        } else {
+          System.err.println("警告: 動画の長さ情報が無効です: " + durationValue);
+          duration = Duration.ZERO;
+        }
+      } catch (Exception e) {
+        System.err.println("動画の長さ変換エラー: " + e.getMessage());
+        e.printStackTrace();
+        duration = Duration.ZERO;
+      }
 
-      VideoStreamInfo videoInfo = new VideoStreamInfo(
-          videoStream.width,
-          videoStream.height,
-          videoStream.r_frame_rate.doubleValue(),
-          videoStream.pix_fmt);
+      // Get file size with error handling
+      long fileSize;
+      try {
+        fileSize = probeResult.format.size;
+        if (fileSize < 0) {
+          System.err.println("警告: ファイルサイズが無効です: " + fileSize);
+          fileSize = 0L;
+        }
+      } catch (Exception e) {
+        System.err.println("ファイルサイズ取得エラー: " + e.getMessage());
+        e.printStackTrace();
+        fileSize = 0L;
+      }
+
+      // Create video stream info with error handling
+      VideoStreamInfo videoInfo;
+      try {
+        double fps = 0.0;
+        if (videoStream.r_frame_rate != null) {
+          try {
+            fps = videoStream.r_frame_rate.doubleValue();
+          } catch (Exception e) {
+            System.err.println("フレームレート変換エラー: " + e.getMessage());
+            System.err.println("r_frame_rate値: " + videoStream.r_frame_rate);
+            fps = 0.0;
+          }
+        } else {
+          System.err.println("警告: フレームレート情報がnullです");
+        }
+
+        System.out.println("検出されたフレームレート: " + fps);
+
+        videoInfo = new VideoStreamInfo(
+            videoStream.width,
+            videoStream.height,
+            fps,
+            videoStream.pix_fmt);
+      } catch (Exception e) {
+        System.err.println("動画ストリーム情報作成エラー: " + e.getMessage());
+        e.printStackTrace();
+        return Result.err("Failed to create video stream info: " + e.getMessage());
+      }
 
       VideoStat stat = new VideoStat(
           inputPath,
@@ -77,6 +129,7 @@ public class VideoModule {
           duration,
           fileSize);
 
+      System.out.println("動画統計情報作成完了");
       return Result.ok(stat);
 
     } catch (IOException e) {
