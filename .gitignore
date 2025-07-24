@@ -27,3 +27,4 @@ vvcnv-rs/
 out/
 assets/
 target/
+.DS_Store

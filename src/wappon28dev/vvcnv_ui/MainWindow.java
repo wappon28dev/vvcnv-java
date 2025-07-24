@@ -13,13 +13,8 @@ import java.awt.datatransfer.Transferable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.stream.IntStream;
 
 /**
  * Main window for the VVCNV GUI application
@@ -46,7 +41,6 @@ public class MainWindow extends JFrame {
 
   // Data
   private VideoModule videoModule;
-  private ExecutorService executorService;
   private VideoStat currentVideoStat;
 
   public MainWindow() {
@@ -369,31 +363,23 @@ public class MainWindow extends JFrame {
       System.err.println("VideoModule初期化エラー:");
       e.printStackTrace();
 
-      StringBuilder errorMessage = new StringBuilder();
-      errorMessage.append("FFmpegの初期化に失敗しました:\n\n");
-      errorMessage.append("エラー: ").append(e.getMessage()).append("\n\n");
-      errorMessage.append("考えられる原因:\n");
-      errorMessage.append("- FFmpegがインストールされていない\n");
-      errorMessage.append("- FFmpegのパスが正しくない\n");
-      errorMessage.append("- FFmpegの実行権限がない\n\n");
-      errorMessage.append("詳細なスタックトレース:\n");
+      var errorDialog = createErrorDialog(
+          "FFmpeg初期化エラー",
+          """
+              FFmpegの初期化に失敗しました:
 
-      for (StackTraceElement element : e.getStackTrace()) {
-        errorMessage.append("  at ").append(element.toString()).append("\n");
-        if (errorMessage.length() > 1000) {
-          errorMessage.append("  ... (省略)\n");
-          break;
-        }
-      }
+              エラー: %s
 
-      JTextArea textArea = new JTextArea(errorMessage.toString());
-      textArea.setRows(15);
-      textArea.setColumns(60);
-      textArea.setEditable(false);
-      textArea.setCaretPosition(0);
+              考えられる原因:
+              - FFmpegがインストールされていない
+              - FFmpegのパスが正しくない
+              - FFmpegの実行権限がない
 
-      JScrollPane scrollPane = new JScrollPane(textArea);
-      JOptionPane.showMessageDialog(this, scrollPane,
+              詳細なスタックトレース:
+              %s
+              """.formatted(e.getMessage(), formatStackTrace(e)));
+
+      JOptionPane.showMessageDialog(this, errorDialog,
           "FFmpeg初期化エラー", JOptionPane.ERROR_MESSAGE);
       System.exit(1);
     }
@@ -430,13 +416,17 @@ public class MainWindow extends JFrame {
         try {
           System.out.println("動画統計情報を読み込み中: " + inputPath);
           Result<VideoStat, String> result = videoModule.stat(inputPath);
-          if (result.isErr()) {
-            Result.Err<VideoStat, String> err = (Result.Err<VideoStat, String>) result;
-            System.err.println("VideoModule.stat() エラー: " + err.error());
-            throw new RuntimeException("VideoModule.stat() failed: " + err.error());
-          }
-          System.out.println("動画統計情報の読み込み完了");
-          return result.unwrap();
+
+          return switch (result) {
+            case Result.Ok<VideoStat, String> ok -> {
+              System.out.println("動画統計情報の読み込み完了");
+              yield ok.value();
+            }
+            case Result.Err<VideoStat, String> err -> {
+              System.err.println("VideoModule.stat() エラー: " + err.error());
+              throw new RuntimeException("VideoModule.stat() failed: " + err.error());
+            }
+          };
         } catch (Exception e) {
           System.err.println("doInBackground()でエラーが発生:");
           e.printStackTrace();
@@ -450,47 +440,68 @@ public class MainWindow extends JFrame {
           currentVideoStat = get();
           updateAudioCheckbox();
           updateResolutionLimits();
-          JOptionPane.showMessageDialog(MainWindow.this,
-              String.format("動画情報を読み込みました:\n%dx%d @ %.2ffps\n時間: %.2f秒",
-                  currentVideoStat.videoStream().width(),
-                  currentVideoStat.videoStream().height(),
-                  currentVideoStat.videoStream().fps(),
-                  (double) currentVideoStat.duration().toSeconds()),
-              "情報", JOptionPane.INFORMATION_MESSAGE);
+
+          var videoInfo = """
+              動画情報を読み込みました:
+              %dx%d @ %.2ffps
+              時間: %.2f秒
+              """.formatted(
+              currentVideoStat.videoStream().width(),
+              currentVideoStat.videoStream().height(),
+              currentVideoStat.videoStream().fps(),
+              (double) currentVideoStat.duration().toSeconds());
+
+          System.out.println(videoInfo);
         } catch (Exception e) {
-          // Print full stack trace to console
           System.err.println("動画情報の読み込みに失敗しました:");
           e.printStackTrace();
 
-          // Show detailed error dialog
-          StringBuilder errorMessage = new StringBuilder();
-          errorMessage.append("動画情報の読み込みに失敗しました:\n\n");
-          errorMessage.append("エラー: ").append(e.getMessage()).append("\n\n");
-          errorMessage.append("詳細:\n");
+          var errorDialog = createErrorDialog(
+              "エラー詳細",
+              """
+                  動画情報の読み込みに失敗しました:
 
-          // Add stack trace to error message
-          for (StackTraceElement element : e.getStackTrace()) {
-            errorMessage.append("  at ").append(element.toString()).append("\n");
-            if (errorMessage.length() > 1000) { // Limit message length
-              errorMessage.append("  ... (省略)\n");
-              break;
-            }
-          }
+                  エラー: %s
 
-          // Show error in a scrollable text area
-          JTextArea textArea = new JTextArea(errorMessage.toString());
-          textArea.setRows(15);
-          textArea.setColumns(60);
-          textArea.setEditable(false);
-          textArea.setCaretPosition(0);
+                  詳細:
+                  %s
+                  """.formatted(e.getMessage(), formatStackTrace(e)));
 
-          JScrollPane scrollPane = new JScrollPane(textArea);
-          JOptionPane.showMessageDialog(MainWindow.this, scrollPane,
+          JOptionPane.showMessageDialog(MainWindow.this, errorDialog,
               "エラー詳細", JOptionPane.ERROR_MESSAGE);
         }
       }
     };
     worker.execute();
+  }
+
+  /**
+   * Create a scrollable error dialog component
+   */
+  private JScrollPane createErrorDialog(String title, String message) {
+    JTextArea textArea = new JTextArea(message);
+    textArea.setRows(15);
+    textArea.setColumns(60);
+    textArea.setEditable(false);
+    textArea.setCaretPosition(0);
+    textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+
+    return new JScrollPane(textArea);
+  }
+
+  /**
+   * Format stack trace to string with length limit
+   */
+  private String formatStackTrace(Exception e) {
+    StringBuilder trace = new StringBuilder();
+    for (StackTraceElement element : e.getStackTrace()) {
+      trace.append("  at ").append(element.toString()).append("\n");
+      if (trace.length() > 1000) {
+        trace.append("  ... (省略)\n");
+        break;
+      }
+    }
+    return trace.toString();
   }
 
   private void updateAudioCheckbox() {

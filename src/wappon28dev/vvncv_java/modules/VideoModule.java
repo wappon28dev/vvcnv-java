@@ -26,9 +26,58 @@ public class VideoModule {
   private final FFmpegExecutor executor;
 
   public VideoModule() throws IOException {
-    // Initialize FFmpeg tools
-    this.ffmpeg = new FFmpeg("/opt/homebrew/bin/ffmpeg"); // Adjust path as needed
-    this.ffprobe = new FFprobe("/opt/homebrew/bin/ffprobe"); // Adjust path as needed
+    // Try different FFmpeg installation paths
+    String[] possiblePaths = {
+        "/opt/homebrew/bin/ffmpeg", // Apple Silicon Homebrew
+        "/usr/local/bin/ffmpeg", // Intel Homebrew
+        "/usr/bin/ffmpeg", // System install
+        "ffmpeg" // PATH
+    };
+
+    String[] possibleProbePaths = {
+        "/opt/homebrew/bin/ffprobe", // Apple Silicon Homebrew
+        "/usr/local/bin/ffprobe", // Intel Homebrew
+        "/usr/bin/ffprobe", // System install
+        "ffprobe" // PATH
+    };
+
+    FFmpeg ffmpegTmp = null;
+    FFprobe ffprobeTmp = null;
+
+    // Try to find ffmpeg
+    for (String path : possiblePaths) {
+      try {
+        ffmpegTmp = new FFmpeg(path);
+        System.out.println("FFmpeg見つかりました: " + path);
+        break;
+      } catch (IOException e) {
+        System.out.println("FFmpegが見つかりません: " + path);
+      }
+    }
+
+    // Try to find ffprobe
+    for (String path : possibleProbePaths) {
+      try {
+        ffprobeTmp = new FFprobe(path);
+        System.out.println("FFprobe見つかりました: " + path);
+        break;
+      } catch (IOException e) {
+        System.out.println("FFprobeが見つかりません: " + path);
+      }
+    }
+
+    if (ffmpegTmp == null) {
+      throw new IOException("FFmpegが見つかりません。以下を確認してください：\n" +
+          "1. Homebrewでインストール: brew install ffmpeg\n" +
+          "2. パスが通っているか確認: which ffmpeg");
+    }
+
+    if (ffprobeTmp == null) {
+      throw new IOException("FFprobeが見つかりません。FFmpegと一緒にインストールされているはずです。");
+    }
+
+    this.ffmpeg = ffmpegTmp;
+    this.ffprobe = ffprobeTmp;
     this.executor = new FFmpegExecutor(ffmpeg, ffprobe);
   }
 
@@ -195,46 +244,48 @@ public class VideoModule {
   /**
    * Process video without progress monitoring (safer for some FFmpeg versions)
    */
-  public Result<Void, String> processSimple(VideoStat stat, VideoProcessParams params) throws IOException {
-    var config = params.config();
-    var outputPath = params.outputPath();
-
-    // Check for upscaling
-    var upscalingCheck = config.checkUpScaling(stat);
-    if (upscalingCheck.isErr()) {
-      return upscalingCheck;
-    }
-
-    System.out.println("Starting encoding: " + outputPath);
-    System.out.println("Config: " + config);
-
-    // Build FFmpeg command
-    var outputBuilder = new FFmpegBuilder()
-        .setInput(stat.path())
-        .overrideOutputFiles(true)
-        .addOutput(outputPath)
-        .setVideoCodec("libx264")
-        .setVideoResolution(config.res().getWidth(), config.res().getHeight())
-        .setVideoFrameRate(config.fps())
-        .setConstantRateFactor(config.crf())
-        .setStrict(FFmpegBuilder.Strict.EXPERIMENTAL);
-
-    // Add audio if required
-    if (config.hasAudio() && !stat.audioStreams().isEmpty()) {
-      outputBuilder.setAudioCodec("aac");
-    } else {
-      outputBuilder.setAudioCodec("none");
-    }
-
-    FFmpegBuilder builder = outputBuilder.done();
-
+  public Result<Void, String> processSimple(VideoStat stat, VideoProcessParams params) {
     try {
+      var config = params.config();
+      var outputPath = params.outputPath();
+
+      // Check for upscaling
+      var upscalingCheck = config.checkUpScaling(stat);
+      if (upscalingCheck.isErr()) {
+        return upscalingCheck;
+      }
+
+      System.out.println("Starting encoding: " + outputPath);
+      System.out.println("Config: " + config);
+
+      // Build FFmpeg command
+      var outputBuilder = new FFmpegBuilder()
+          .setInput(stat.path())
+          .overrideOutputFiles(true)
+          .addOutput(outputPath)
+          .setVideoCodec("libx264")
+          .setVideoResolution(config.res().getWidth(), config.res().getHeight())
+          .setVideoFrameRate(config.fps())
+          .setConstantRateFactor(config.crf())
+          .setStrict(FFmpegBuilder.Strict.EXPERIMENTAL);
+
+      // Add audio if required
+      if (config.hasAudio() && !stat.audioStreams().isEmpty()) {
+        outputBuilder.setAudioCodec("aac");
+      } else {
+        outputBuilder.setAudioCodec("none");
+      }
+
+      FFmpegBuilder builder = outputBuilder.done();
+
       // Run without progress monitoring
       FFmpegJob job = executor.createJob(builder);
       job.run();
       System.out.println("✓ Encoding completed: " + outputPath);
       return Result.ok(null);
     } catch (Exception e) {
+      System.err.println("エンコーディングエラー: " + e.getMessage());
+      e.printStackTrace();
       return Result.err("Encoding failed: " + e.getMessage());
     }
   }

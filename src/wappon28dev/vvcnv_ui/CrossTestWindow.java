@@ -197,6 +197,22 @@ public class CrossTestWindow extends JDialog {
     executorService = Executors.newFixedThreadPool(params.maxThreads());
     statusLabel.setText("変換開始...");
 
+    // Initialize table cells
+    for (int row = 0; row < tableModel.getRowCount(); row++) {
+      for (int col = 0; col < tableModel.getColumnCount(); col++) {
+        tableModel.setValueAt("待機中...", row, col);
+      }
+    }
+
+    // Validate tasks
+    if (tasks.isEmpty()) {
+      statusLabel.setText("変換するタスクがありません");
+      return;
+    }
+
+    System.out.println("変換タスク数: " + tasks.size());
+    System.out.println("最大スレッド数: " + params.maxThreads());
+
     // Create futures for all tasks
     List<CompletableFuture<Void>> futures = tasks.stream()
         .map(task -> CompletableFuture.runAsync(() -> processTask(task), executorService))
@@ -207,11 +223,37 @@ public class CrossTestWindow extends JDialog {
         .thenRun(() -> SwingUtilities.invokeLater(() -> {
           statusLabel.setText("全ての変換が完了しました!");
           overallProgressBar.setValue(tasks.size());
+
+          // Show completion summary
+          long successCount = futures.stream()
+              .mapToLong(f -> {
+                try {
+                  f.get(); // This will complete since allOf() finished
+                  return 1;
+                } catch (Exception e) {
+                  return 0;
+                }
+              })
+              .sum();
+
+          String summary = String.format("変換完了: %d成功 / %d全体", successCount, tasks.size());
+          statusLabel.setText(summary);
+
           executorService.shutdown();
-        }));
+        }))
+        .exceptionally(throwable -> {
+          SwingUtilities.invokeLater(() -> {
+            statusLabel.setText("変換中にエラーが発生しました: " + throwable.getMessage());
+            executorService.shutdown();
+          });
+          return null;
+        });
   }
 
   private void processTask(ConversionTask task) {
+    System.out.printf("タスク開始: 解像度=%s, CRF=%d, 位置=(%d,%d)%n",
+        task.config.res().getDisplayName(), task.config.crf(), task.resIndex, task.crfIndex);
+
     try {
       // Update UI to show task is starting
       SwingUtilities.invokeLater(() -> {
@@ -225,28 +267,40 @@ public class CrossTestWindow extends JDialog {
       String outputPath = params.outputDir() + "/" + fileNameParts.name() +
           task.config.toFileName() + "." + fileNameParts.extension();
 
+      System.out.println("出力パス: " + outputPath);
+
       // Process video
       var processParams = new VideoModule.VideoProcessParams(outputPath, task.config);
       Result<Void, String> result = videoModule.processSimple(videoStat, processParams);
 
+      System.out.printf("変換結果: %s (解像度=%s, CRF=%d)%n",
+          result.isOk() ? "成功" : "失敗",
+          task.config.res().getDisplayName(), task.config.crf());
+
       // Update UI with result
       SwingUtilities.invokeLater(() -> {
-        if (result.isOk()) {
-          try {
-            long fileSize = Files.size(Paths.get(outputPath));
+        switch (result) {
+          case Result.Ok<Void, String> ok -> {
+            try {
+              long fileSize = Files.size(Paths.get(outputPath));
+              double fileSizeMB = fileSize / (1024.0 * 1024.0);
+              ConversionResult conversionResult = new ConversionResult(
+                  true, formatFileSize(fileSize), outputPath, null, fileSizeMB);
+              tableModel.setValueAt(conversionResult, task.crfIndex, task.resIndex);
+              System.out.printf("ファイルサイズ: %.2f MB (%s)%n", fileSizeMB, formatFileSize(fileSize));
+            } catch (IOException e) {
+              System.err.println("ファイルサイズ取得エラー: " + e.getMessage());
+              ConversionResult conversionResult = new ConversionResult(
+                  false, "エラー", null, "ファイルサイズ取得失敗: " + e.getMessage(), 0.0);
+              tableModel.setValueAt(conversionResult, task.crfIndex, task.resIndex);
+            }
+          }
+          case Result.Err<Void, String> err -> {
+            System.err.println("変換エラー: " + err.error());
             ConversionResult conversionResult = new ConversionResult(
-                true, formatFileSize(fileSize), outputPath, null);
-            tableModel.setValueAt(conversionResult, task.crfIndex, task.resIndex);
-          } catch (IOException e) {
-            ConversionResult conversionResult = new ConversionResult(
-                false, "エラー", null, "ファイルサイズ取得失敗");
+                false, "失敗", null, err.error(), 0.0);
             tableModel.setValueAt(conversionResult, task.crfIndex, task.resIndex);
           }
-        } else {
-          Result.Err<Void, String> err = (Result.Err<Void, String>) result;
-          ConversionResult conversionResult = new ConversionResult(
-              false, "失敗", null, err.error());
-          tableModel.setValueAt(conversionResult, task.crfIndex, task.resIndex);
         }
 
         completedTasks++;
@@ -255,9 +309,12 @@ public class CrossTestWindow extends JDialog {
       });
 
     } catch (Exception e) {
+      System.err.println("タスク処理中にエラーが発生: " + e.getMessage());
+      e.printStackTrace();
+
       SwingUtilities.invokeLater(() -> {
         ConversionResult conversionResult = new ConversionResult(
-            false, "エラー", null, e.getMessage());
+            false, "エラー", null, "処理エラー: " + e.getMessage(), 0.0);
         tableModel.setValueAt(conversionResult, task.crfIndex, task.resIndex);
 
         completedTasks++;
@@ -284,7 +341,7 @@ public class CrossTestWindow extends JDialog {
   /**
    * Conversion result data
    */
-  public record ConversionResult(boolean success, String fileSize, String outputPath, String error) {
+  public record ConversionResult(boolean success, String fileSize, String outputPath, String error, double fileSizeMB) {
   }
 
   /**
@@ -295,18 +352,18 @@ public class CrossTestWindow extends JDialog {
     public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
         boolean hasFocus, int row, int column) {
 
-      if (value instanceof ConversionResult result) {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-
-        if (result.success()) {
+      return switch (value) {
+        case ConversionResult result when result.success() -> {
           // Success case
+          JPanel panel = new JPanel(new BorderLayout());
+          panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
           JLabel sizeLabel = new JLabel(result.fileSize(), JLabel.CENTER);
           sizeLabel.setFont(sizeLabel.getFont().deriveFont(Font.BOLD));
 
           // Color based on file size (green for small, red for large)
-          // This is a simplified color mapping
-          sizeLabel.setForeground(new Color(0, 128, 0));
+          Color color = getFileSizeColor(result.fileSizeMB());
+          sizeLabel.setForeground(color);
 
           JButton viewButton = new JButton("表示");
           viewButton.setPreferredSize(new Dimension(60, 25));
@@ -314,29 +371,56 @@ public class CrossTestWindow extends JDialog {
 
           panel.add(sizeLabel, BorderLayout.CENTER);
           panel.add(viewButton, BorderLayout.SOUTH);
-          panel.setBackground(Color.WHITE);
-        } else {
+          panel.setBackground(isSelected ? Color.LIGHT_GRAY : Color.WHITE);
+
+          if (isSelected) {
+            panel.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
+          }
+
+          yield panel;
+        }
+        case ConversionResult result when !result.success() -> {
           // Error case
+          JPanel panel = new JPanel(new BorderLayout());
+          panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+
           JLabel errorLabel = new JLabel("失敗", JLabel.CENTER);
           errorLabel.setForeground(Color.RED);
           errorLabel.setToolTipText(result.error());
 
           panel.add(errorLabel, BorderLayout.CENTER);
-          panel.setBackground(new Color(255, 240, 240));
+          panel.setBackground(isSelected ? new Color(255, 200, 200) : new Color(255, 240, 240));
+
+          if (isSelected) {
+            panel.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
+          }
+
+          yield panel;
         }
-
-        if (isSelected) {
-          panel.setBorder(BorderFactory.createLineBorder(Color.BLUE, 2));
+        case String str -> {
+          // Progress text
+          JLabel label = new JLabel(str, JLabel.CENTER);
+          if (isSelected) {
+            label.setOpaque(true);
+            label.setBackground(Color.LIGHT_GRAY);
+          }
+          yield label;
         }
+        default -> super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+      };
+    }
 
-        return panel;
-      } else if (value instanceof String str) {
-        // Progress text
-        JLabel label = new JLabel(str, JLabel.CENTER);
-        return label;
-      }
+    /**
+     * Get color based on file size (green for small, red for large)
+     */
+    private Color getFileSizeColor(double fileSizeMB) {
+      // Assume 0-10MB range, green to red gradient
+      double ratio = Math.min(fileSizeMB / 10.0, 1.0); // Normalize to 0-1
 
-      return super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+      int red = (int) (255 * ratio);
+      int green = (int) (255 * (1.0 - ratio));
+
+      return new Color(red, green, 0);
     }
 
     private void openFile(String filePath) {
