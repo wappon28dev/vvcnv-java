@@ -33,7 +33,7 @@ public final class ConversionUtils {
   }
 
   /**
-   * Generate CRF values based on parameters
+   * Generate CRF values based on parameters (descending order for better intuition)
    */
   public static List<Integer> generateCrfValues(int minCrf, int maxCrf, int crfSteps) {
     if (crfSteps == 1) {
@@ -41,7 +41,7 @@ public final class ConversionUtils {
     }
 
     return IntStream.range(0, crfSteps)
-        .map(i -> minCrf + (int) Math.round((double) i * (maxCrf - minCrf) / (crfSteps - 1)))
+        .map(i -> maxCrf - (int) Math.round((double) i * (maxCrf - minCrf) / (crfSteps - 1)))
         .boxed()
         .toList();
   }
