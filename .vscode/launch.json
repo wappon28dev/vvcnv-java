@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "SimpleVideoTest",
+      "request": "launch",
+      "mainClass": "wappon28dev.vvncv_java.test.SimpleVideoTest",
+      "projectName": "univ-oop-proc-1"
+    },
+    {
+      "type": "java",
+      "name": "Main",
+      "request": "launch",
+      "mainClass": "wappon28dev.vvncv_java.Main",
+      "projectName": "univ-oop-proc-1"
+    },
+    {
+      "type": "java",
+      "name": "Current File",
+      "request": "launch",
+      "mainClass": "${file}",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
