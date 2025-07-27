@@ -37,9 +37,11 @@ public class CrossTestWindow extends JDialog {
   private DefaultTableModel tableModel;
   private JProgressBar overallProgressBar;
   private JLabel statusLabel;
+  private JButton stopButton;
   private ExecutorService executorService;
   private List<ConversionTask> tasks;
   private volatile int completedTasks = 0;
+  private volatile boolean isStopped = false;
 
   public CrossTestWindow(JFrame parent, VideoStat videoStat, ConversionParams params, VideoService videoService) {
     super(parent, "クロステスト実行", true);
@@ -83,6 +85,10 @@ public class CrossTestWindow extends JDialog {
     overallProgressBar.setStringPainted(true);
 
     statusLabel = new JLabel("準備中...");
+
+    stopButton = new JButton("停止");
+    stopButton.setPreferredSize(new Dimension(80, 30));
+    stopButton.addActionListener(e -> stopConversion());
   }
 
   private void setupLayout() {
@@ -110,6 +116,10 @@ public class CrossTestWindow extends JDialog {
     progressPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
     progressPanel.add(statusLabel, BorderLayout.NORTH);
     progressPanel.add(overallProgressBar, BorderLayout.CENTER);
+
+    var buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    buttonPanel.add(stopButton);
+    progressPanel.add(buttonPanel, BorderLayout.EAST);
 
     add(scrollPane, BorderLayout.CENTER);
     add(progressPanel, BorderLayout.SOUTH);
@@ -196,6 +206,7 @@ public class CrossTestWindow extends JDialog {
   private void onAllTasksCompleted() {
     statusLabel.setText("全ての変換が完了しました!");
     overallProgressBar.setValue(tasks.size());
+    stopButton.setEnabled(false);
 
     long successCount = tasks.stream()
         .mapToLong(task -> {
@@ -215,6 +226,17 @@ public class CrossTestWindow extends JDialog {
   }
 
   private void processTask(ConversionTask task) {
+    // 停止フラグをチェック
+    if (isStopped) {
+      SwingUtilities.invokeLater(() -> {
+        var conversionResult = new ConversionResult(
+            false, "停止", null, "ユーザーによって停止されました", 0.0);
+        tableModel.setValueAt(conversionResult, task.crfIndex(), task.resIndex());
+        updateProgress();
+      });
+      return;
+    }
+
     System.out.printf("タスク開始: 解像度=%s, CRF=%d, 位置=(%d,%d)%n",
         task.config().res().getDisplayName(), task.config().crf(), task.resIndex(), task.crfIndex());
 
@@ -233,6 +255,17 @@ public class CrossTestWindow extends JDialog {
           fileNameParts.extension());
 
       System.out.println("出力パス: " + outputPath);
+
+      // 変換実行前に再度停止チェック
+      if (isStopped) {
+        SwingUtilities.invokeLater(() -> {
+          var conversionResult = new ConversionResult(
+              false, "停止", null, "ユーザーによって停止されました", 0.0);
+          tableModel.setValueAt(conversionResult, task.crfIndex(), task.resIndex());
+          updateProgress();
+        });
+        return;
+      }
 
       var processParams = new VideoModule.VideoProcessParams(outputPath, task.config());
       var result = videoService.getVideoModule().processSimple(videoStat, processParams);
@@ -288,5 +321,31 @@ public class CrossTestWindow extends JDialog {
     completedTasks++;
     overallProgressBar.setValue(completedTasks);
     overallProgressBar.setString("%d/%d 完了".formatted(completedTasks, tasks.size()));
+  }
+
+  private void stopConversion() {
+    if (executorService != null && !executorService.isShutdown()) {
+      isStopped = true;
+      statusLabel.setText("変換を停止しています...");
+      stopButton.setEnabled(false);
+
+      // 新しいタスクの受け入れを停止
+      executorService.shutdown();
+
+      // 実行中のタスクを強制終了
+      SwingUtilities.invokeLater(() -> {
+        try {
+          // 5秒待機してからタスクを強制終了
+          if (!executorService.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
+            executorService.shutdownNow();
+            statusLabel.setText("変換が停止されました");
+          }
+        } catch (InterruptedException e) {
+          executorService.shutdownNow();
+          statusLabel.setText("変換が停止されました");
+          Thread.currentThread().interrupt();
+        }
+      });
+    }
   }
 }

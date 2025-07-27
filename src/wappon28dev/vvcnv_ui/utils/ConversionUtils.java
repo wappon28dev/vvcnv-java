@@ -33,7 +33,8 @@ public final class ConversionUtils {
   }
 
   /**
-   * Generate CRF values based on parameters (descending order for better intuition)
+   * Generate CRF values based on parameters (descending order for better
+   * intuition)
    */
   public static List<Integer> generateCrfValues(int minCrf, int maxCrf, int crfSteps) {
     if (crfSteps == 1) {
@@ -44,5 +45,24 @@ public final class ConversionUtils {
         .map(i -> maxCrf - (int) Math.round((double) i * (maxCrf - minCrf) / (crfSteps - 1)))
         .boxed()
         .toList();
+  }
+
+  /**
+   * Generate default output directory path based on input file path
+   * Returns input file's parent directory + "/converted/"
+   */
+  public static String generateDefaultOutputDir(String inputFilePath) {
+    if (inputFilePath == null || inputFilePath.trim().isEmpty()) {
+      return "";
+    }
+
+    var inputFile = new java.io.File(inputFilePath);
+    var parentDir = inputFile.getParent();
+
+    if (parentDir == null) {
+      return "output";
+    }
+
+    return parentDir + java.io.File.separator + "output";
   }
 }

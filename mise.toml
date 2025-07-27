@@ -1,2 +1,14 @@
+[tasks.run]
+run = "mvn exec:java -Dexec.mainClass=\"wappon28dev.vvcnv_ui.Main\""
+
+[tasks.compile]
+run = "mvn compile"
+
+[tasks.build]
+run = "mvn package"
+
+[tasks.launch]
+run = "java -jar target/vvcnv-ui.jar"
+
 [tools]
 java = "21"

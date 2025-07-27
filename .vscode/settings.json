@@ -1,4 +1,5 @@
 {
   "java.configuration.updateBuildConfiguration": "automatic",
-  "cSpell.words": ["ffprobe", "upscaling", "vvcnv", "vvcnv"]
+  "cSpell.words": ["ffprobe", "upscaling", "vvcnv", "vvcnv"],
+  "java.compile.nullAnalysis.mode": "automatic"
 }

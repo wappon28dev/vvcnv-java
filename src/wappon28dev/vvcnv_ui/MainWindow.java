@@ -6,6 +6,7 @@ import wappon28dev.vvcnv_ui.dialogs.PresetDialog;
 import wappon28dev.vvcnv_ui.models.ConversionParams;
 import wappon28dev.vvcnv_ui.models.Preset;
 import wappon28dev.vvcnv_ui.services.VideoService;
+import wappon28dev.vvcnv_ui.utils.ConversionUtils;
 import wappon28dev.vvcnv_ui.utils.UIUtils;
 import wappon28dev.vvcnv_java.modules.VideoRes;
 import wappon28dev.vvcnv_java.modules.VideoStat;
@@ -24,7 +25,7 @@ import java.nio.file.Paths;
  */
 public class MainWindow extends JFrame {
 
-  private static final String DEFAULT_OUTPUT_DIR = "out";
+  private static final String DEFAULT_OUTPUT_DIR = "output";
 
   // UI Components
   private JTextField inputFileField;
@@ -264,6 +265,10 @@ public class MainWindow extends JFrame {
   }
 
   private void onInputFileDrop(File file) {
+    // Auto-generate output directory path
+    String defaultOutputDir = ConversionUtils.generateDefaultOutputDir(file.getAbsolutePath());
+    outputDirField.setText(defaultOutputDir);
+
     loadVideoStats(file.getAbsolutePath());
   }
 
@@ -288,6 +293,11 @@ public class MainWindow extends JFrame {
     if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
       var selectedFile = fileChooser.getSelectedFile();
       inputFileField.setText(selectedFile.getAbsolutePath());
+
+      // Auto-generate output directory path
+      String defaultOutputDir = ConversionUtils.generateDefaultOutputDir(selectedFile.getAbsolutePath());
+      outputDirField.setText(defaultOutputDir);
+
       loadVideoStats(selectedFile.getAbsolutePath());
     }
   }
